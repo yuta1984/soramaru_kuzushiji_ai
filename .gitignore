@@ -1,0 +1,7 @@
+prepare.ps1
+model/convnext_v3.onnx
+model/convnext_v3.meta.json
+# 大容量モデルは Hugging Face Hub から fetch（README 参照）
+model/convnext_v4.onnx
+.DS_Store
+Thumbs.db

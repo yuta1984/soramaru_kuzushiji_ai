@@ -1,0 +1,229 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preload" as="image" href="./soramaru/03_star.png">
+<link rel="preload" as="image" href="./soramaru/08_fun.png">
+<link rel="preload" as="image" href="./soramaru/11_analyse.png">
+<link rel="preload" as="image" href="./soramaru/12_smile.png">
+<link rel="preload" as="image" href="./soramaru/19_soramaru.png">
+<link rel="preload" as="image" href="./soramaru/21_soramaru.png">
+<link rel="preload" as="image" href="./soramaru/22_soramaru.png">
+<title>そらまる くずし字認識</title>
+<style>
+  :root {
+    --bg: #fafafa;
+    --fg: #222;
+    --muted: #777;
+    --accent: #2563eb;
+    --bar-bg: #e5e7eb;
+    --accent-bar: #7c3aed;
+    --top1-bg: #fef3c7;
+    --border: #e5e7eb;
+    --error: #b91c1c;
+    --bubble-bg: #ffffff;
+    --bubble-border: #d6d3d1;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0 auto;
+    padding: 24px;
+    font-family: "Yu Gothic", "Yu Gothic UI", "Meiryo", "Noto Sans CJK JP", system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--fg);
+    max-width: 768px;
+  }
+  h1 { font-size: 1.4rem; margin: 0 0 4px; }
+  .sub { color: var(--muted); font-size: 0.9rem; margin: 0 0 18px; }
+  .status { font-size: 0.9rem; color: var(--muted); margin: 8px 0; }
+  .status.error { color: var(--error); }
+
+  .mascot-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 18px;
+    margin: 8px 0 20px;
+  }
+  .mascot {
+    width: 160px;
+    height: 160px;
+    flex: 0 0 auto;
+    object-fit: contain;
+  }
+  .bubble {
+    position: relative;
+    background: var(--bubble-bg);
+    border: 1px solid var(--bubble-border);
+    border-radius: 14px;
+    padding: 14px 18px;
+    font-size: 0.95rem;
+    line-height: 1.55;
+    max-width: 640px;
+    flex: 1 1 auto;
+    align-self: center;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+  }
+  .bubble::before,
+  .bubble::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    right: 100%;
+    transform: translateY(-50%);
+    border-style: solid;
+  }
+  .bubble::before {
+    border-width: 9px 11px 9px 0;
+    border-color: transparent var(--bubble-border) transparent transparent;
+  }
+  .bubble::after {
+    border-width: 8px 10px 8px 0;
+    border-color: transparent var(--bubble-bg) transparent transparent;
+    margin-right: -1px;
+  }
+  @media (max-width: 600px) {
+    .mascot-row { flex-direction: column; align-items: center; }
+    .mascot { width: 120px; height: 120px; }
+    .bubble { align-self: stretch; }
+    .bubble::before, .bubble::after { display: none; }
+  }
+
+  .input-area {
+    display: block;
+    border: 2px dashed var(--border);
+    border-radius: 12px;
+    padding: 28px 20px;
+    text-align: center;
+    background: #fff;
+    cursor: pointer;
+    transition: border-color .15s;
+    margin: 12px 0 18px;
+  }
+  .input-area:hover, .input-area.focus { border-color: var(--accent); }
+  .input-area input[type=file] { display: none; }
+  .input-area p { margin: 4px 0; }
+  .input-area .hint { color: var(--muted); font-size: 0.85rem; }
+
+  .results-block {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .preview-box {
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px;
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+  }
+  .preview-box canvas {
+    background: #fff;
+    border: 1px solid var(--border);
+    flex: 0 0 auto;
+    width: 160px;
+    height: 160px;
+  }
+  .preview-meta { font-size: 0.78rem; color: var(--muted); line-height: 1.5; }
+
+  table.results {
+    width: 100%;
+    border-collapse: collapse;
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  table.results th, table.results td {
+    padding: 5px 8px;
+    border-bottom: 1px solid var(--border);
+    font-size: 0.88rem;
+    vertical-align: middle;
+  }
+  table.results th {
+    text-align: left;
+    background: #f3f4f6;
+    color: var(--muted);
+    font-weight: 500;
+    font-size: 0.74rem;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+  table.results tr:last-child td { border-bottom: none; }
+  table.results tr.top1 { background: var(--top1-bg); }
+  td.rank { color: var(--muted); width: 28px; text-align: right; }
+  td.glyph {
+    font-size: 1.4rem;
+    font-family: "Yu Mincho", "Hiragino Mincho ProN", "Noto Serif JP", serif;
+    width: 40px;
+    text-align: center;
+  }
+  td.code { font-family: ui-monospace, monospace; color: var(--muted); font-size: 0.8rem; width: 70px; }
+  td.prob { width: 56px; text-align: right; font-variant-numeric: tabular-nums; }
+  td.bar { width: 100%; }
+  .bar-track { background: var(--bar-bg); border-radius: 3px; height: 5px; }
+  .bar-fill { height: 100%; border-radius: 3px; background: var(--accent-bar); }
+
+  .empty {
+    padding: 24px;
+    text-align: center;
+    color: var(--muted);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: #fff;
+    font-size: 0.85rem;
+  }
+
+  .site-footer {
+    margin-top: 40px;
+    padding-top: 18px;
+    border-top: 1px solid var(--border);
+    font-size: 0.82rem;
+    color: var(--muted);
+    line-height: 1.6;
+  }
+  .site-footer a { color: var(--accent); text-decoration: none; }
+  .site-footer a:hover { text-decoration: underline; }
+  .site-footer p { margin: 4px 0; }
+  .footer-note { font-size: 0.78rem; }
+</style>
+</head>
+<body>
+  <h1>そらまる くずし字認識</h1>
+  <p class="sub">みんなで翻刻のマスコット「そらまる」がくずし字を認識します ・ <a href="./soramaru/characters.png" target="_blank" rel="noopener">そらまるについて</a></p>
+
+  <section class="mascot-row" aria-live="polite">
+    <img id="soramaru" class="mascot" src="./soramaru/01_normal.png" alt="そらまる" width="160" height="160">
+    <div id="bubble" class="bubble">
+      こんにちは！ 認識したい文字の画像を Ctrl + V で貼り付けるか、画像ファイルを選択してください
+    </div>
+  </section>
+
+  <div class="status" id="status-shared">準備中...</div>
+
+  <label class="input-area" id="dropzone" tabindex="0">
+    <p><strong>画像をクリック選択</strong>、または <strong>Ctrl+V でクリップボードから貼り付け</strong></p>
+    <p class="hint">中央正方形でクロップし、384×384 にリサイズして認識します。</p>
+    <input type="file" id="file" accept="image/*">
+  </label>
+
+  <section class="results-block">
+    <div class="preview-box">
+      <canvas id="preview" width="384" height="384"></canvas>
+      <div class="preview-meta" id="preview-meta">未入力</div>
+    </div>
+    <div id="results"><div class="empty">画像を入力すると上位 20 候補が表示されます。</div></div>
+  </section>
+
+  <footer class="site-footer">
+    <p><a href="https://app.honkoku.org" target="_blank" rel="noopener">みんなで翻刻</a></p>
+    <p class="footer-note">このモデルは<a href="https://www.kaggle.com/competitions/kuzushiji-recognition" target="_blank" rel="noopener">Kaggle Kuzushiji Recognition</a>データセットおよび<a href="https://lab.hi.u-tokyo.ac.jp/datasets/kuzushiji" target="_blank" rel="noopener">東京大学史料編纂所くずし字データセット</a>を用いて学習されました</p>
+  </footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.19.2/dist/ort.min.js" crossorigin="anonymous"></script>
+  <script src="./app.js" defer></script>
+</body>
+</html>
