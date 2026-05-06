@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="https://yuta1984.github.io/soramaru_kuzushiji_ai/soramaru/12_smile.png" alt="そらまる" height="300">
+</p>
+
 # そらまる くずし字認識 (soramaru_kuzushiji_ai)
 
 ブラウザ完結で動作するくずし字（一文字）認識デモサイト。[みんなで翻刻](https://app.honkoku.org) のマスコット「そらまる」がアシスタント役を務めます。
