@@ -55,6 +55,16 @@ function setThinkingMascot() {
   $bubble.textContent = "どれどれ…ふむふむ…";
 }
 
+function setLoadingMascot(text) {
+  $soramaru.src = "./soramaru/11_analyse.png";
+  $bubble.textContent = text;
+}
+
+function setInitialMascot() {
+  $soramaru.src = "./soramaru/01_normal.png";
+  $bubble.textContent = "こんにちは！ 認識したい文字の画像を Ctrl + V で貼り付けるか、画像ファイルを選択してください";
+}
+
 let uniMap = new Map();
 
 function setShared(msg, isError = false) {
@@ -88,6 +98,89 @@ function parseUnicodeCsv(text) {
   return m;
 }
 
+// --- IndexedDB cache for the (~117MB) ONNX model ---
+const IDB_NAME  = "soramaru-kuzushiji";
+const IDB_STORE = "models";
+
+function openIDB() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(IDB_NAME, 1);
+    req.onupgradeneeded = () => req.result.createObjectStore(IDB_STORE);
+    req.onsuccess = () => resolve(req.result);
+    req.onerror   = () => reject(req.error);
+  });
+}
+async function idbGet(key) {
+  try {
+    const db = await openIDB();
+    return await new Promise((resolve, reject) => {
+      const tx = db.transaction(IDB_STORE, "readonly");
+      const req = tx.objectStore(IDB_STORE).get(key);
+      req.onsuccess = () => resolve(req.result);
+      req.onerror   = () => reject(req.error);
+    });
+  } catch (e) {
+    console.warn("idbGet failed:", e);
+    return null;
+  }
+}
+async function idbPut(key, value) {
+  try {
+    const db = await openIDB();
+    await new Promise((resolve, reject) => {
+      const tx = db.transaction(IDB_STORE, "readwrite");
+      tx.objectStore(IDB_STORE).put(value, key);
+      tx.oncomplete = () => resolve();
+      tx.onerror    = () => reject(tx.error);
+    });
+  } catch (e) {
+    console.warn("idbPut failed:", e);
+  }
+}
+
+async function loadOrFetchOnnx(url) {
+  const cached = await idbGet(url);
+  if (cached) {
+    setLoadingMascot("認識モデルを読み込み中…");
+    return cached;
+  }
+
+  const r = await fetch(url);
+  if (!r.ok) throw new Error(`fetch onnx: ${r.status}`);
+  const totalBytes = parseInt(r.headers.get("Content-Length") || "0", 10);
+  const totalMB    = totalBytes ? Math.round(totalBytes / 1024 / 1024) : null;
+  const sizeText   = totalMB ? `（${totalMB} MB）` : "";
+  const msg = (pct) => `認識モデル${sizeText}をダウンロードしています（初回のみ）。ちょっと待ってね…${pct != null ? ` ${pct}%` : ""}`;
+
+  let bytes;
+  if (!totalBytes || !r.body) {
+    setLoadingMascot(msg(null));
+    bytes = new Uint8Array(await r.arrayBuffer());
+  } else {
+    setLoadingMascot(msg(0));
+    const reader = r.body.getReader();
+    const chunks = [];
+    let received = 0, lastPct = -1;
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      chunks.push(value);
+      received += value.byteLength;
+      const pct = Math.floor((received / totalBytes) * 100);
+      if (pct !== lastPct) {
+        setLoadingMascot(msg(pct));
+        lastPct = pct;
+      }
+    }
+    bytes = new Uint8Array(received);
+    let offset = 0;
+    for (const c of chunks) { bytes.set(c, offset); offset += c.byteLength; }
+  }
+  // IDB 保存は ORT 初期化と並列で完了させる（次回起動時のキャッシュヒット用、失敗しても致命的ではない）
+  idbPut(url, bytes);
+  return bytes;
+}
+
 async function loadModel(m) {
   setShared("モデル情報を読み込み中...");
   m.meta = await fetchJSON(m.metaUrl);
@@ -95,7 +188,8 @@ async function loadModel(m) {
     throw new Error("meta.json に classes/mean/std/input_size が無い");
   }
   setShared("モデルを読み込み中...");
-  m.session = await ort.InferenceSession.create(m.onnxUrl, {
+  const onnxBytes = await loadOrFetchOnnx(m.onnxUrl);
+  m.session = await ort.InferenceSession.create(onnxBytes, {
     executionProviders: ["wasm"],
     graphOptimizationLevel: "all",
   });
@@ -113,6 +207,7 @@ async function init() {
     ort.env.wasm.simd = true;
     uniMap = parseUnicodeCsv(await fetchText(UNI_URL));
     await loadModel(MODEL);
+    setInitialMascot();
     setShared("準備完了。画像を貼り付けるか選択してください。");
   } catch (e) {
     console.error(e);

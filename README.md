@@ -2,6 +2,9 @@
 
 ブラウザ完結で動作するくずし字（一文字）認識デモサイト。[みんなで翻刻](https://app.honkoku.org) のマスコット「そらまる」がアシスタント役を務めます。
 
+- 🌐 **デモサイト**: https://yuta1984.github.io/soramaru_kuzushiji_ai/
+- 🤖 **モデル (Hugging Face)**: https://huggingface.co/yuta1984/soramaru_kuzushiji_ai
+
 ## 概要
 
 ユーザーがクリップボードからペーストまたはファイル選択した画像に対し、ConvNeXt-tiny ベースの分類モデルがくずし字を一文字認識し、上位 20 候補と確率を表示します。すべての推論は [ONNX Runtime Web](https://onnxruntime.ai/) を介してブラウザ内で完結し、サーバーへの画像送信は発生しません。
